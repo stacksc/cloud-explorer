@@ -813,9 +813,10 @@
           }
         
           let node = nodeFromPath(rootNode, path);
-
+        
           renderBreadcrumb();
-          
+        
+          // ✅ Safe guard: no node found
           if (!node) {
             document.getElementById("explorer").innerHTML =
               `<p style="color:red">No data available at path [${path.join(" › ")}]</p>`;
@@ -842,7 +843,7 @@
                 </div>
               `;
               if (controlMeta && Object.keys(controlMeta).length > 0) {
-                renderMatchedControls(window.currentCommand);
+                renderMatchedControls(matchedControlsDiv, currentProvider.key, window.currentCommand);
               }
             } else {
               matchedControlsDiv.innerHTML = "";
@@ -906,14 +907,14 @@
             bc.appendChild(s);
           });
         }
-        
+
         async function renderExplorer(node) {
           const ex = document.getElementById("explorer");
           ex.innerHTML = "";
         
           // ---------- Azure Discovery mode ----------
           if (currentProvider?.key === "azure-discovery") {
-            // path = [] → show subscriptions (sorted, name + ID)
+            // path = [] → show subscriptions
             if (path.length === 0) {
               const subs = Object.entries(rootNode || {});
               subs.sort(([idA, objA], [idB, objB]) => {
@@ -973,25 +974,28 @@
                 card.className = "drill-card leaf";
                 card.innerHTML = `<h4 style="margin:0">${res.name}</h4><p class="meta" style="margin:4px 0 0 0">${res.type || ""}</p>`;
                 card.onclick = () => {
-                  navigateTo([...path, res.name]); // keeps breadcrumb consistent
+                  navigateTo([...path, res.name]);
                   showResourceDetails(res);
-                  renderMatchedControls(ex, "azure-discovery", `${path[1]} ${path[2]}`);
+        
+                  // ✅ matched controls go into #matched-controls
+                  renderMatchedControls(document.getElementById("matched-controls"), "azure-discovery", `${path[1]} ${path[2]}`);
                 };
                 ex.appendChild(card);
               });
               return;
             }
+        
             // path = [subId, service, resourceType, resourceName]
             const sub = rootNode?.[path[0]];
             const res = (sub?.services?.[path[1]]?.[path[2]] || []).find(r => r.name === path[3]);
             if (res) {
               showResourceDetails(res);
-              renderMatchedControls(ex, "azure-discovery", `${path[1]} ${path[2]}`);
+              renderMatchedControls(document.getElementById("matched-controls"), "azure-discovery", `${path[1]} ${path[2]}`);
             }
             return;
           }
         
-          // ---------- CLI providers (unchanged) ----------
+          // ---------- CLI providers ----------
           if (!node || isLeaf(node)) {
             const fullCmd = fullCmdFromPath(path);
             const header = document.createElement("div");
@@ -1002,7 +1006,11 @@
               </div>
               <div class="meta" style="margin-top:4px;">${node?.help || ""}</div>`;
             ex.appendChild(header);
-            if (currentProvider) await renderMatchedControls(ex, currentProvider.key, fullCmd);
+        
+            // ✅ matched controls go into #matched-controls
+            if (currentProvider) {
+              await renderMatchedControls(document.getElementById("matched-controls"), currentProvider.key, fullCmd);
+            }
             return;
           }
         
