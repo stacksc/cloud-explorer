@@ -422,7 +422,7 @@
         let controlMeta = null;
 
         async function loadControlsMapping() {
-          if (controlMeta) return controlMeta;  // ✅ already cached
+          if (controlMeta) return controlMeta;  // ✅ cached
           try {
             const resp = await fetch(controlsUrl, { cache: "no-store" });
             controlMeta = await resp.json();
@@ -433,7 +433,18 @@
           }
           return controlMeta;
         }
-
+        
+        document.addEventListener("DOMContentLoaded", async () => {
+          await maybeAddAzureDiscovery();
+          renderProviders();
+        
+          // preload once at startup
+          await loadControlsMapping();
+        
+          if (window.lucide?.createIcons) lucide.createIcons();
+          // search handler unchanged…
+        });
+        
         let iconMap = {};
         fetch("icon_map.json").then(r=>r.json()).then(d=>iconMap=d).catch(()=>{});
       
@@ -739,29 +750,32 @@
         
           if (currentProvider?.key === "azure-discovery") {
             const [subId, service, rtype, resName] = path;
-            if (path.length === 1) return root[subId];
-            if (path.length === 2) return root[subId]?.services?.[service];
-            if (path.length === 3) return root[subId]?.services?.[service]?.[rtype];
-            if (path.length === 4) {
-              return (root[subId]?.services?.[service]?.[rtype] || []).find(r => r.name === resName);
+        
+            // depth 1 → subscription object
+            if (path.length === 1) {
+              return root[subId] || null;
             }
+        
+            // depth 2 → service object
+            if (path.length === 2) {
+              return root[subId]?.services?.[service] || null;
+            }
+        
+            // depth 3 → resourceType object (array of resources)
+            if (path.length === 3) {
+              return root[subId]?.services?.[service]?.[rtype] || null;
+            }
+        
+            // depth 4 → single resource (match by name)
+            if (path.length === 4) {
+              return (root[subId]?.services?.[service]?.[rtype] || [])
+                .find(r => r.name === resName) || null;
+            }
+        
             return null;
           }
-         
-          // default for CLI providers
-          let node = root;
-          for (const seg of path) {
-            if (!node) break;
-            node = node[seg];
-          }
-          return node;
-        }
-         
-        function nodeFromPath(root, path) {
-          if (!path || path.length === 0) {
-            return root;   // 👈 always return root node when path is empty
-          }
         
+          // default CLI providers
           let node = root;
           for (const seg of path) {
             if (!node) break;
@@ -1006,29 +1020,25 @@
           if (window.lucide?.createIcons) lucide.createIcons();
         }
         
-        async function renderMatchedControls(container, providerKey, fullCmd) {
-          const wrap = document.createElement("div");
-          wrap.id = "matches-panel";
-          wrap.innerHTML = `<h3>Matched Controls</h3>
-            <div class="loading-spinner">
-              <span class="spinner"></span> Fetching controls...
-            </div>`;
+        async function renderMatchedControls(container, providerKey, fullCmd){
+          const wrap=document.createElement("div");
+          wrap.id="matches-panel";
+          wrap.innerHTML="<h3>Matched Controls</h3>";
           container.appendChild(wrap);
         
-          const mapping = await loadControlsMapping();
+          const mapping = await loadControlsMapping(); // returns cached instantly
           const entry = mapping[`${providerKey}:${fullCmd}`];
         
-          wrap.innerHTML = "<h3>Matched Controls</h3>";
-          if (entry?.matched_controls?.length) {
-            const grid = document.createElement("div");
-            grid.className = "controls-grid";
-            entry.matched_controls.forEach(ctrl => grid.appendChild(controlCard(ctrl)));
+         if(entry?.matched_controls?.length){
+            const grid=document.createElement("div");
+            grid.className="controls-grid";
+            entry.matched_controls.forEach(ctrl=>grid.appendChild(controlCard(ctrl)));
             wrap.appendChild(grid);
           } else {
             wrap.innerHTML += "<p class='meta'>No mapped controls.</p>";
           }
         }
-        
+         
         function showResourceDetails(res) {
           const details = document.getElementById("details");
           details.style.display = "block";
