@@ -391,27 +391,24 @@
         /* --------------------------- globals / state --------------------------- */
         let mode = "provider";                // "provider" | "control"
         let providerCommandIndex = null;      // flattened commands across providers
-        let controlToCommands = {};           // { "AC-1": { meta, commands: [...] }, ... }
 
-        // Use GitHub Release asset for control mappings
-        const controlToCommandsUrl = "https://github.com/stacksc/cloud-explorer/releases/latest/download/command_to_controls.json";
+        // Unified loader for control mappings (always from GitHub release asset)
+        let commandToControls = null;
         
-        // Load the big mapping file
-        async function loadControlMappings() {
+        async function loadControlsMapping() {
+          if (commandToControls) return;
           try {
-            const resp = await fetch(controlToCommandsUrl);
-            if (!resp.ok) throw new Error("Failed to load control mappings");
-            controlToCommands = await resp.json();
-            console.log("✅ Loaded control mappings:", controlToCommands);
+            const url = "https://raw.githubusercontent.com/stacksc/cloud-explorer/gh-pages/command_to_controls.json";
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error(`Failed to fetch ${url}`);
+            commandToControls = await resp.json();
+            console.log("✅ Loaded control mappings:", commandToControls);
           } catch (err) {
             console.error("❌ Could not load control mappings:", err);
-            controlToCommands = {};
+            commandToControls = {};
           }
         }
-        
-        // call this during startup
-        loadControlMappings();
-      
+
         let iconMap = {};
         fetch("icon_map.json").then(r=>r.json()).then(d=>iconMap=d).catch(()=>{});
       
