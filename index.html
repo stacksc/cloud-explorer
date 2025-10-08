@@ -748,30 +748,16 @@
         function nodeFromPath(root, path) {
           if (!path || path.length === 0) return root;
         
-          if (currentProvider?.key === "azure-discovery") {
-            // discovery path handling unchanged
-            const [subId, service, rtype, resName] = path;
-        
-            if (path.length === 1) return root[subId] || null;
-            if (path.length === 2) return root[subId]?.services?.[service] || null;
-            if (path.length === 3) return root[subId]?.services?.[service]?.[rtype] || null;
-            if (path.length === 4) {
-              return (root[subId]?.services?.[service]?.[rtype] || [])
-                .find(r => r.name === resName) || null;
-            }
-            return null;
-          }
-        
-          // ---------- CLI providers ----------
+          // CLI providers
           let node = root;
-          for (const seg of path) {
+          for (let i = 0; i < path.length; i++) {
+            const seg = path[i];
             if (!node?.subcommands || !node.subcommands[seg]) {
-              console.warn("Invalid path segment:", seg, "under", node);
-              return null;   // ✅ don’t throw, just return null
+              return null;
             }
             node = node.subcommands[seg];
           }
-          return node || null;
+          return node;  // <-- don't require subcommands at the end
         }
         
         function fullCmdFromPath(arr){return arr.join(" ");}
