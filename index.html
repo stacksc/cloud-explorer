@@ -393,12 +393,14 @@
         let providerCommandIndex = null;      // flattened commands across providers
 
         // Unified loader for control mappings (always from GitHub release asset)
+
         let commandToControls = null;
         
         async function loadControlsMapping() {
           if (commandToControls) return;
           try {
-            const url = "https://raw.githubusercontent.com/stacksc/cloud-explorer/gh-pages/command_to_controls.json";
+            // Pick ONE: pinned release or gh-pages
+            const url = "https://github.com/stacksc/cloud-explorer/releases/download/v0.1.0/command_to_controls.json";
             const resp = await fetch(url);
             if (!resp.ok) throw new Error(`Failed to fetch ${url}`);
             commandToControls = await resp.json();
@@ -408,7 +410,7 @@
             commandToControls = {};
           }
         }
-
+        
         let iconMap = {};
         fetch("icon_map.json").then(r=>r.json()).then(d=>iconMap=d).catch(()=>{});
       
@@ -422,7 +424,6 @@
           { name:"OVHcloud AI",  file:"providers/ovhai.json",   key:"ovhai",   bin:"ovhai" },
           { name:"TorLite",      file:"providers/torlite.json", key:"torlite", bin:"torlite" },
         ];
-
 
         async function maybeAddAzureDiscovery() {
           try {
@@ -442,16 +443,6 @@
           }
         }
         
-        let commandToControls = null;
-        async function loadControlsMapping(){
-          if(!commandToControls){
-            try {
-              const resp = await fetch("command_to_controls.json");
-              commandToControls = await resp.json();
-            } catch(err){ console.error("Failed to load mapping", err); }
-          }
-        }
-      
         /* ----------------------------- debounce ------------------------------- */
         function debounce(fn, delay = 250) {
           let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), delay); };
