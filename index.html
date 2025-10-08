@@ -751,37 +751,29 @@
           if (currentProvider?.key === "azure-discovery") {
             const [subId, service, rtype, resName] = path;
         
-            // depth 1 → subscription object
             if (path.length === 1) {
               return root[subId] || null;
             }
-        
-            // depth 2 → service object
             if (path.length === 2) {
               return root[subId]?.services?.[service] || null;
             }
-        
-            // depth 3 → resourceType object (array of resources)
             if (path.length === 3) {
               return root[subId]?.services?.[service]?.[rtype] || null;
             }
-        
-            // depth 4 → single resource (match by name)
             if (path.length === 4) {
               return (root[subId]?.services?.[service]?.[rtype] || [])
                 .find(r => r.name === resName) || null;
             }
-        
             return null;
           }
         
-          // default CLI providers
+          // --- CLI providers ---
           let node = root;
           for (const seg of path) {
-            if (!node) break;
-            node = node[seg];
+            if (!node?.subcommands) return null;  // 👈 safe guard
+            node = node.subcommands[seg];
           }
-          return node;
+          return node || null;
         }
         
         function fullCmdFromPath(arr){return arr.join(" ");}
@@ -821,9 +813,17 @@
           }
         
           let node = nodeFromPath(rootNode, path);
+
+          renderBreadcrumb();
+          
+          if (!node) {
+            document.getElementById("explorer").innerHTML =
+              `<p style="color:red">No data available at path [${path.join(" › ")}]</p>`;
+            resetDetailsPanel();
+            return;
+          }
         
           try {
-            renderBreadcrumb();
             renderExplorer(node);
         
             if (currentProvider?.key !== "azure-discovery") {
