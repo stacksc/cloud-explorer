@@ -775,6 +775,15 @@
 
         function navigateTo(newPath) {
           path = [...newPath];
+        
+          // Root case: just show top-level provider root
+          if (path.length === 0) {
+            renderBreadcrumb();
+            renderExplorer(rootNode);
+            resetDetailsPanel();
+            return;
+          }
+        
           let node = nodeFromPath(rootNode, path);
         
           try {
@@ -808,7 +817,7 @@
               `<p style="color:red">Navigation error at path [${path.join(" › ")}]</p>`;
           }
         }
-
+        
         function renderBreadcrumb() {
           const bc = document.getElementById("breadcrumb");
           bc.innerHTML = "";
