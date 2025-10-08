@@ -6,29 +6,6 @@
       <title>Multi-Cloud JSON Explorer</title>
       <style>
 
-        .loading-spinner {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          color: #555;
-          font-style: italic;
-          margin-top: 10px;
-        }
-        
-        .loading-spinner .spinner {
-          width: 14px;
-          height: 14px;
-          border: 2px solid #ccc;
-          border-top-color: #333;
-          border-radius: 50%;
-          animation: spin 0.8s linear infinite;
-        }
-        
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-        
-
         .control-nav-group {
           margin: 8px 0;
         }
@@ -414,37 +391,8 @@
         /* --------------------------- globals / state --------------------------- */
         let mode = "provider";                // "provider" | "control"
         let providerCommandIndex = null;      // flattened commands across providers
-
-        let commandToControls = null;
-
-        const controlsUrl = "https://mystoretore.blob.core.windows.net/cloudexplorer/command_to_controls.json?sp=r&st=2025-10-08T03:40:48Z&se=2025-10-08T11:55:48Z&spr=https&sv=2024-11-04&sr=b&sig=GZcQrY1NWfUPBcVpYmj0S7QL1Llrt7T2%2B5hPCqdhjuM%3D";
-        
-        let controlMeta = null;
-
-        async function loadControlsMapping() {
-          if (controlMeta) return controlMeta;  // ✅ cached
-          try {
-            const resp = await fetch(controlsUrl, { cache: "no-store" });
-            controlMeta = await resp.json();
-            console.log("✅ Controls mapping loaded:", Object.keys(controlMeta).length);
-          } catch (err) {
-            console.error("❌ Could not load controls mapping", err);
-            controlMeta = {};
-          }
-          return controlMeta;
-        }
-        
-        document.addEventListener("DOMContentLoaded", async () => {
-          await maybeAddAzureDiscovery();
-          renderProviders();
-        
-          // preload once at startup
-          await loadControlsMapping();
-        
-          if (window.lucide?.createIcons) lucide.createIcons();
-          // search handler unchanged…
-        });
-        
+        let controlToCommands = {};           // { "AC-1": { meta, commands: [...] }, ... }
+      
         let iconMap = {};
         fetch("icon_map.json").then(r=>r.json()).then(d=>iconMap=d).catch(()=>{});
       
@@ -477,6 +425,16 @@
           }
         }
         
+        let commandToControls = null;
+        async function loadControlsMapping(){
+          if(!commandToControls){
+            try {
+              const resp = await fetch("command_to_controls.json");
+              commandToControls = await resp.json();
+            } catch(err){ console.error("Failed to load mapping", err); }
+          }
+        }
+      
         /* ----------------------------- debounce ------------------------------- */
         function debounce(fn, delay = 250) {
           let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), delay); };
@@ -744,46 +702,7 @@
       
         let currentProvider=null,currentTree=null,rootNode=null,path=[];
         const isLeaf=n=>!n||!n.subcommands||Object.keys(n.subcommands).length===0;
-
-        function nodeFromPath(root, path) {
-          if (!path || path.length === 0) return root;
-        
-          if (currentProvider?.key === "azure-discovery") {
-            const [subId, service, rtype, resName] = path;
-        
-            // depth 1 → subscription object
-            if (path.length === 1) {
-              return root[subId] || null;
-            }
-        
-            // depth 2 → service object
-            if (path.length === 2) {
-              return root[subId]?.services?.[service] || null;
-            }
-        
-            // depth 3 → resourceType object (array of resources)
-            if (path.length === 3) {
-              return root[subId]?.services?.[service]?.[rtype] || null;
-            }
-        
-            // depth 4 → single resource (match by name)
-            if (path.length === 4) {
-              return (root[subId]?.services?.[service]?.[rtype] || [])
-                .find(r => r.name === resName) || null;
-            }
-        
-            return null;
-          }
-        
-          // default CLI providers
-          let node = root;
-          for (const seg of path) {
-            if (!node) break;
-            node = node[seg];
-          }
-          return node;
-        }
-        
+        function nodeFromPath(root,arr){let n=root;for(const seg of arr){if(!n.subcommands||!n.subcommands[seg])return null;n=n.subcommands[seg];}return n;}
         function fullCmdFromPath(arr){return arr.join(" ");}
       
         async function loadProvider(provider){
@@ -811,41 +730,37 @@
 
         function navigateTo(newPath) {
           path = [...newPath];
-        
-          // Root case: just show top-level provider root
-          if (path.length === 0) {
-            renderBreadcrumb();
-            renderExplorer(rootNode);
-            resetDetailsPanel();
-            return;
-          }
-        
-          let node = nodeFromPath(rootNode, path);
+          let node = rootNode;
         
           try {
+            if (currentProvider?.key === "azure-discovery") {
+              if (newPath.length === 0) {
+                node = rootNode; // back to subscriptions list
+              } else {
+                for (let i = 0; i < path.length; i++) {
+                  const seg = path[i];
+                  if (!node) break;   // bail if structure mismatch
+                  if (i === 0) {
+                    node = node[seg]; // subscription
+                  } else if (i === 1) {
+                    node = node.services?.[seg]; // service
+                  } else if (i === 2) {
+                    node = node[seg]; // resource type
+                  } else if (i === 3) {
+                    // resource name → details handled elsewhere
+                  }
+                }
+              }
+            } else {
+              node = nodeFromPath(rootNode, path);
+            }
+        
             renderBreadcrumb();
             renderExplorer(node);
         
             if (currentProvider?.key !== "azure-discovery") {
               if (isLeaf(node)) showDetails(node);
               else resetDetailsPanel();
-            }
-        
-            // Matched controls handling
-            window.currentCommand = node?.command || null;
-            const matchedControlsDiv = document.getElementById("matched-controls");
-        
-            if (window.currentCommand) {
-              matchedControlsDiv.innerHTML = `
-                <div class="loading-spinner">
-                  <span class="spinner"></span> Loading controls...
-                </div>
-              `;
-              if (controlMeta && Object.keys(controlMeta).length > 0) {
-                renderMatchedControls(window.currentCommand);
-              }
-            } else {
-              matchedControlsDiv.innerHTML = "";
             }
           } catch (err) {
             console.error("Navigation error", err, { path, node });
@@ -1020,25 +935,22 @@
           if (window.lucide?.createIcons) lucide.createIcons();
         }
         
-        async function renderMatchedControls(container, providerKey, fullCmd){
-          const wrap=document.createElement("div");
-          wrap.id="matches-panel";
-          wrap.innerHTML="<h3>Matched Controls</h3>";
-          container.appendChild(wrap);
-        
-          const mapping = await loadControlsMapping(); // returns cached instantly
-          const entry = mapping[`${providerKey}:${fullCmd}`];
-        
-         if(entry?.matched_controls?.length){
-            const grid=document.createElement("div");
-            grid.className="controls-grid";
+        async function renderMatchedControls(container,providerKey,fullCmd){
+          await loadControlsMapping();
+          const wrap=document.createElement("div"); wrap.id="matches-panel";
+          const h=document.createElement("h3"); h.textContent="Matched Controls"; wrap.appendChild(h);
+          const cmdKey=`${providerKey}:${fullCmd}`;
+          const entry=commandToControls&&commandToControls[cmdKey];
+          if(entry&&entry.matched_controls&&entry.matched_controls.length){
+            const grid=document.createElement("div"); grid.className="controls-grid";
             entry.matched_controls.forEach(ctrl=>grid.appendChild(controlCard(ctrl)));
             wrap.appendChild(grid);
           } else {
-            wrap.innerHTML += "<p class='meta'>No mapped controls.</p>";
+            const p=document.createElement("p"); p.className="meta"; p.textContent="No mapped controls."; wrap.appendChild(p);
           }
+          container.appendChild(wrap);
         }
-         
+      
         function showResourceDetails(res) {
           const details = document.getElementById("details");
           details.style.display = "block";
