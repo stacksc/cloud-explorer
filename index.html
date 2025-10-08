@@ -395,22 +395,22 @@
         // Unified loader for control mappings (always from GitHub release asset)
 
         let commandToControls = null;
+
+        const controlsUrl = "https://mystoretore.blob.core.windows.net/cloudexplorer/command_to_controls.json";
         
         async function loadControlsMapping() {
-          if (commandToControls) return;
           try {
-            // Pick ONE: pinned release or gh-pages
-            const url = "https://github.com/stacksc/cloud-explorer/releases/download/v0.1.0/command_to_controls.json";
-            const resp = await fetch(url);
-            if (!resp.ok) throw new Error(`Failed to fetch ${url}`);
-            commandToControls = await resp.json();
-            console.log("✅ Loaded control mappings:", commandToControls);
+            const resp = await fetch(controlsUrl);
+            if (!resp.ok) throw new Error(`Failed to fetch ${resp.status}`);
+            const data = await resp.json();
+            console.log("✅ Loaded controls mapping from Azure:", Object.keys(data).length);
+            return data;
           } catch (err) {
-            console.error("❌ Could not load control mappings:", err);
-            commandToControls = {};
+            console.error("❌ Could not load controls mapping", err);
+            return {};
           }
         }
-        
+
         let iconMap = {};
         fetch("icon_map.json").then(r=>r.json()).then(d=>iconMap=d).catch(()=>{});
       
