@@ -419,20 +419,19 @@
 
         const controlsUrl = "https://mystoretore.blob.core.windows.net/cloudexplorer/command_to_controls.json?sp=r&st=2025-10-08T03:40:48Z&se=2025-10-08T11:55:48Z&spr=https&sv=2024-11-04&sr=b&sig=GZcQrY1NWfUPBcVpYmj0S7QL1Llrt7T2%2B5hPCqdhjuM%3D";
         
+        let controlMeta = null;
+
         async function loadControlsMapping() {
+          if (controlMeta) return controlMeta;  // ✅ already cached
           try {
-            const resp = await fetch(controlsUrl);
-            const data = await resp.json();
-            controlMeta = data;
-            console.log(`✅ Loaded controls mapping from Azure: ${Object.keys(controlMeta).length}`);
-        
-            // 🔥 Trigger re-render if user already has a command selected
-            if (window.currentCommand) {
-              renderMatchedControls(window.currentCommand);
-            }
+            const resp = await fetch(controlsUrl, { cache: "no-store" });
+            controlMeta = await resp.json();
+            console.log("✅ Controls mapping loaded:", Object.keys(controlMeta).length);
           } catch (err) {
             console.error("❌ Could not load controls mapping", err);
+            controlMeta = {};
           }
+          return controlMeta;
         }
 
         let iconMap = {};
@@ -736,6 +735,29 @@
         const isLeaf=n=>!n||!n.subcommands||Object.keys(n.subcommands).length===0;
 
         function nodeFromPath(root, path) {
+          if (!path || path.length === 0) return root;
+        
+          if (currentProvider?.key === "azure-discovery") {
+            const [subId, service, rtype, resName] = path;
+            if (path.length === 1) return root[subId];
+            if (path.length === 2) return root[subId]?.services?.[service];
+            if (path.length === 3) return root[subId]?.services?.[service]?.[rtype];
+            if (path.length === 4) {
+              return (root[subId]?.services?.[service]?.[rtype] || []).find(r => r.name === resName);
+            }
+            return null;
+          }
+         
+          // default for CLI providers
+          let node = root;
+          for (const seg of path) {
+            if (!node) break;
+            node = node[seg];
+          }
+          return node;
+        }
+         
+        function nodeFromPath(root, path) {
           if (!path || path.length === 0) {
             return root;   // 👈 always return root node when path is empty
           }
@@ -984,22 +1006,29 @@
           if (window.lucide?.createIcons) lucide.createIcons();
         }
         
-        async function renderMatchedControls(container,providerKey,fullCmd){
-          await loadControlsMapping();
-          const wrap=document.createElement("div"); wrap.id="matches-panel";
-          const h=document.createElement("h3"); h.textContent="Matched Controls"; wrap.appendChild(h);
-          const cmdKey=`${providerKey}:${fullCmd}`;
-          const entry=commandToControls&&commandToControls[cmdKey];
-          if(entry&&entry.matched_controls&&entry.matched_controls.length){
-            const grid=document.createElement("div"); grid.className="controls-grid";
-            entry.matched_controls.forEach(ctrl=>grid.appendChild(controlCard(ctrl)));
+        async function renderMatchedControls(container, providerKey, fullCmd) {
+          const wrap = document.createElement("div");
+          wrap.id = "matches-panel";
+          wrap.innerHTML = `<h3>Matched Controls</h3>
+            <div class="loading-spinner">
+              <span class="spinner"></span> Fetching controls...
+            </div>`;
+          container.appendChild(wrap);
+        
+          const mapping = await loadControlsMapping();
+          const entry = mapping[`${providerKey}:${fullCmd}`];
+        
+          wrap.innerHTML = "<h3>Matched Controls</h3>";
+          if (entry?.matched_controls?.length) {
+            const grid = document.createElement("div");
+            grid.className = "controls-grid";
+            entry.matched_controls.forEach(ctrl => grid.appendChild(controlCard(ctrl)));
             wrap.appendChild(grid);
           } else {
-            const p=document.createElement("p"); p.className="meta"; p.textContent="No mapped controls."; wrap.appendChild(p);
+            wrap.innerHTML += "<p class='meta'>No mapped controls.</p>";
           }
-          container.appendChild(wrap);
         }
-      
+        
         function showResourceDetails(res) {
           const details = document.getElementById("details");
           details.style.display = "block";
