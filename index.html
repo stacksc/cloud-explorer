@@ -734,7 +734,17 @@
       
         let currentProvider=null,currentTree=null,rootNode=null,path=[];
         const isLeaf=n=>!n||!n.subcommands||Object.keys(n.subcommands).length===0;
-        function nodeFromPath(root,arr){let n=root;for(const seg of arr){if(!n.subcommands||!n.subcommands[seg])return null;n=n.subcommands[seg];}return n;}
+
+        function nodeFromPath(root, path) {
+          if (!path || path.length === 0) return root;
+          let node = root;
+          for (const seg of path) {
+            node = node[seg];
+            if (!node) break;
+          }
+          return node;
+        }
+
         function fullCmdFromPath(arr){return arr.join(" ");}
       
         async function loadProvider(provider){
