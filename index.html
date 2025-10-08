@@ -736,15 +736,18 @@
         const isLeaf=n=>!n||!n.subcommands||Object.keys(n.subcommands).length===0;
 
         function nodeFromPath(root, path) {
-          if (!path || path.length === 0) return root;
+          if (!path || path.length === 0) {
+            return root;   // 👈 always return root node when path is empty
+          }
+        
           let node = root;
           for (const seg of path) {
-            node = node[seg];
             if (!node) break;
+            node = node[seg];
           }
           return node;
         }
-
+        
         function fullCmdFromPath(arr){return arr.join(" ");}
       
         async function loadProvider(provider){
@@ -772,31 +775,9 @@
 
         function navigateTo(newPath) {
           path = [...newPath];
-          let node = rootNode;
+          let node = nodeFromPath(rootNode, path);
         
           try {
-            if (currentProvider?.key === "azure-discovery") {
-              if (newPath.length === 0) {
-                node = rootNode; // back to subscriptions list
-              } else {
-                for (let i = 0; i < path.length; i++) {
-                  const seg = path[i];
-                  if (!node) break;   // bail if structure mismatch
-                  if (i === 0) {
-                    node = node[seg]; // subscription
-                  } else if (i === 1) {
-                    node = node.services?.[seg]; // service
-                  } else if (i === 2) {
-                    node = node[seg]; // resource type
-                  } else if (i === 3) {
-                    // resource name → details handled elsewhere
-                  }
-                }
-              }
-            } else {
-              node = nodeFromPath(rootNode, path);
-            }
-        
             renderBreadcrumb();
             renderExplorer(node);
         
@@ -805,9 +786,10 @@
               else resetDetailsPanel();
             }
         
-            // --- ✅ Controls handling added here ---
+            // Matched controls handling
             window.currentCommand = node?.command || null;
             const matchedControlsDiv = document.getElementById("matched-controls");
+        
             if (window.currentCommand) {
               matchedControlsDiv.innerHTML = `
                 <div class="loading-spinner">
@@ -818,17 +800,15 @@
                 renderMatchedControls(window.currentCommand);
               }
             } else {
-              matchedControlsDiv.innerHTML = ""; // clear when nothing selected
+              matchedControlsDiv.innerHTML = "";
             }
-            // ---------------------------------------
-        
           } catch (err) {
             console.error("Navigation error", err, { path, node });
             document.getElementById("explorer").innerHTML =
               `<p style="color:red">Navigation error at path [${path.join(" › ")}]</p>`;
           }
         }
-        
+
         function renderBreadcrumb() {
           const bc = document.getElementById("breadcrumb");
           bc.innerHTML = "";
