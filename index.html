@@ -399,13 +399,16 @@
         async function loadControlsMapping() {
           try {
             const resp = await fetch(controlsUrl);
-            if (!resp.ok) throw new Error(`Failed to fetch ${resp.status}`);
             const data = await resp.json();
-            console.log("✅ Loaded controls mapping from Azure:", Object.keys(data).length);
-            return data;
+            controlMeta = data;
+            console.log(`✅ Loaded controls mapping from Azure: ${Object.keys(controlMeta).length}`);
+        
+            // 🔥 Trigger re-render if user already has a command selected
+            if (window.currentCommand) {
+              renderMatchedControls(window.currentCommand);
+            }
           } catch (err) {
             console.error("❌ Could not load controls mapping", err);
-            return {};
           }
         }
 
