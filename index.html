@@ -748,16 +748,23 @@
         function nodeFromPath(root, path) {
           if (!path || path.length === 0) return root;
         
-          // CLI providers
           let node = root;
           for (let i = 0; i < path.length; i++) {
             const seg = path[i];
-            if (!node?.subcommands || !node.subcommands[seg]) {
-              return null;
+        
+            // If this level has subcommands and the seg exists, descend
+            if (node.subcommands && node.subcommands[seg]) {
+              node = node.subcommands[seg];
+            } else {
+              // If we’re at the last segment, allow node itself to be returned
+              if (i === path.length - 1) {
+                return node;
+              }
+              return null; // bail early if missing in the middle
             }
-            node = node.subcommands[seg];
           }
-          return node;  // <-- don't require subcommands at the end
+        
+          return node;
         }
         
         function fullCmdFromPath(arr){return arr.join(" ");}
