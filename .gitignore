@@ -1,0 +1,45 @@
+# ── Environment / virtualenvs ───────────────────────────────
+.env
+antenv/
+!*.env.example
+.venv/
+venv/
+env/
+.wheelhouse/
+
+# ── Python cache / build junk ───────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+*.pkl
+*.pyo
+*.so
+
+# ── Logs / temp output ─────────────────────────────────────
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+
+# ── Coverage / test output ─────────────────────────────────
+.coverage
+coverage.xml
+htmlcov/
+pytest_cache/
+
+# ── OS / editor junk ───────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.iml
+
+# ── Local config files you don't want in git ───────────────
+*.local
+*.secret
+*.cfg
+*.ini

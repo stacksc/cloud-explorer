@@ -413,6 +413,23 @@ def load_all_commands(providers_dir: str) -> List[CommandEntry]:
     print(f"✅ Loaded {len(entries)} leaf commands from {providers_dir}")
     return entries
 
+from openai import APIError, RateLimitError, InternalServerError
+
+async def call_with_backoff(func, *args, **kwargs):
+    """Retry helper for OpenAI API calls with exponential backoff."""
+    for attempt in range(8):
+        try:
+            return await func(*args, **kwargs)
+        except (RateLimitError, APIError, InternalServerError) as e:
+            wait = min(60, 2 ** attempt + random.random() * 3)
+            print(f"⚠️ Rate/API limit hit ({type(e).__name__}). Sleeping {wait:.1f}s before retry...")
+            await asyncio.sleep(wait)
+        except Exception as e:
+            print(f"⚠️ Unexpected LLM error: {e}. Sleeping briefly...")
+            await asyncio.sleep(3)
+    print("🚨 Max retries exceeded for one request.")
+    return None
+
 async def generate_control_narrative(cmd: CommandEntry, ctrl: Control, relation: str) -> str:
     if not GENERATE_NARRATIVES:
         return ""
@@ -424,36 +441,44 @@ async def generate_control_narrative(cmd: CommandEntry, ctrl: Control, relation:
         ctrl.title,
         ctrl.description or ctrl.full_text
     )
-    
+
     if ck in NARR_CACHE:
         return NARR_CACHE[ck]
 
-    system_msg = ("You are a senior cloud compliance analyst..."
-                  "• Intent: ...\n• Evidence: ...")
+    system_msg = (
+        "You are a senior cloud compliance analyst.\n"
+        "Your job is to explain how each cloud operation maps to NIST 800-53 controls.\n"
+        "Respond with concise, structured text:\n"
+        "• Intent: the security objective.\n"
+        "• Evidence: how this command provides or validates control coverage."
+    )
 
-    user_msg = (f"CONTROL: {ctrl.id} {ctrl.title}\n"
-                f"Objective: {(ctrl.description or ctrl.title or '').strip()}\n"
-                f"OPERATION: {cmd.bin_hint} {cmd.full_cmd}".strip() + "\n"
-                f"Description: {(cmd.description or cmd.emb_text)}\n"
-                f"Relation: {relation}\n"
-                "Write 2–3 sentences. Use the Intent/Evidence structure.")
+    user_msg = (
+        f"CONTROL: {ctrl.id} {ctrl.title}\n"
+        f"Objective: {(ctrl.description or ctrl.title or '').strip()}\n"
+        f"OPERATION: {cmd.bin_hint} {cmd.full_cmd}\n"
+        f"Description: {(cmd.description or cmd.emb_text)}\n"
+        f"Relation: {relation}\n"
+        "Write 2–3 sentences using the Intent/Evidence format."
+    )
 
-    # simple bounded retry
-    for attempt in range(3):
-        try:
-            resp = await async_client.chat.completions.create(
-                model=LLM_MODEL,
-                temperature=0,
-                messages=[{"role":"system","content":system_msg},
-                          {"role":"user","content":user_msg}],
-                timeout=30,
-            )
-            text = postprocess_narrative(resp.choices[0].message.content.strip())
-            NARR_CACHE[ck] = text
-            return text
-        except Exception:
-            await asyncio.sleep(0.8 * (attempt + 1))
-    return f"Intent: {ctrl.title or ctrl.family}.\nEvidence: `{cmd.bin_hint} {cmd.full_cmd}` {relation} relevant settings."
+    resp = await call_with_backoff(
+        async_client.chat.completions.create,
+        model=LLM_MODEL,
+        temperature=0,
+        messages=[
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg},
+        ],
+        timeout=60,
+    )
+
+    if not resp:
+        return f"Intent: {ctrl.title or ctrl.family}.\nEvidence: `{cmd.bin_hint} {cmd.full_cmd}` {relation} relevant settings."
+
+    text = postprocess_narrative(resp.choices[0].message.content.strip())
+    NARR_CACHE[ck] = text
+    return text
 
 # -------------------- Matcher --------------------
 
@@ -603,7 +628,7 @@ async def enrich_narratives_async(mapping, ctrls, max_calls=MAX_LLM_CALLS, top_n
     if not GENERATE_NARRATIVES or max_calls <= 0:
         return
 
-    sem = asyncio.Semaphore(12)
+    sem = asyncio.Semaphore(3)
     lock = asyncio.Lock()
     completed = 0
     SAVE_EVERY = 500
@@ -653,6 +678,7 @@ async def enrich_narratives_async(mapping, ctrls, max_calls=MAX_LLM_CALLS, top_n
         batch = items[b:b+BATCH]
         tasks = [asyncio.create_task(process_one(k, v)) for k, v in batch]
         await asyncio.gather(*tasks)
+        await asyncio.sleep(random.uniform(2, 5))
 
 def build_ai_context(cmd: CommandEntry, control: Control, score: float) -> dict:
     """
