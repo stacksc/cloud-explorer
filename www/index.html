@@ -1,0 +1,1405 @@
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/json-formatter-js@2.3.4/dist/json-formatter.min.css">
+      <link rel="stylesheet" href="static/css/main.css">
+      <script src="https://cdn.jsdelivr.net/npm/json-formatter-js@2.3.4/dist/json-formatter.umd.js"></script>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Multi-Cloud JSON Explorer</title>
+      <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+
+      <script type="text/javascript">
+      !function(T,l,y){var S=T.location,k="script",D="instrumentationKey",C="ingestionendpoint",I="disableExceptionTracking",
+      E="ai.device.",b="toLowerCase",w="crossOrigin",N="POST",e="appInsightsSDK",t="https://js.monitor.azure.com/scripts/b/ai.2.min.js";
+      T.appInsights = window.appInsights || function(config) {
+          function r(e){t[e]=function(){var n=arguments;t.queue.push(function(){t[e].apply(t,n)})}}
+          var t={config:config},n=document,a=window;
+          t.queue=[],t.version=2;
+          for(var s=["trackPageView","trackEvent","trackException","trackTrace","trackDependencyData"],i=0;i<s.length;i++)r(s[i]);
+          var o=n.createElement(k);o.src=t.src||t.url||t.scriptUrl||t[C]||t[t[C]]||t[t.url]||t.url||t||t;
+          o[w]="anonymous",o.onload=function(){a[e]||a.appInsights.run()},n.getElementsByTagName(k)[0].parentNode.appendChild(o);
+          return t
+      }({instrumentationKey:"<YOUR-INSTRUMENTATION-KEY>"});
+      appInsights.trackPageView();
+      </script>
+      
+    </head>
+    <body>
+      <header>Multi-Cloud JSON Explorer</header>
+      <main>
+        <nav id="nav"></nav>
+        <div id="center">
+          <div id="top-bar">
+            <!-- Left group: visitor tile + breadcrumb -->
+            <div style="display:flex;align-items:center;gap:16px;">
+              <div class="visitor-tile">
+                <h4>Visitors</h4>
+                <div class="visitor-count" id="visitor-count">0</div>
+                <div class="subtext">This week</div>
+              </div>
+              <div id="breadcrumb"></div>
+            </div>
+    
+            <!-- Right group: search + mode toggle + logout -->
+            <div style="display:flex;align-items:center;gap:12px;margin-left:auto;">
+              <input type="text" id="search" placeholder="Search..." />
+              <button id="mode-toggle">Switch to Control Mode</button>
+              <a href="/logout" class="logout-btn">Logout</a>
+            </div>
+          </div>
+    
+          <!-- Analysis / Summary Panel -->
+          <div id="analysisSection" style="display:none; position:relative; background:#fff; border-radius:6px; padding:15px; box-shadow:0 2px 6px rgba(0,0,0,0.1);">
+            <button id="closeAnalysisBtn"
+                    style="position:absolute; top:8px; right:10px;
+                           background:#e33; color:#fff;
+                           border:none; border-radius:4px;
+                           padding:4px 10px; cursor:pointer; font-size:0.85rem;">
+              ✕ Close
+            </button>
+            <div id="analysisSummary"></div>
+          
+            <h3>Insights</h3>
+            <ul id="insightsList"></ul>
+          
+            <h3>Anomalies</h3>
+            <ul id="anomaliesList"></ul>
+          
+            <!-- Narrative Modal -->
+            <div id="narrativeModal" class="modal">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h3>📊 Executive Narrative</h3>
+                  <span class="close-btn" onclick="closeNarrativeModal()">✖</span>
+                </div>
+                <div id="narrativeTextModal" class="modal-body"></div>
+              </div>
+            </div>
+          </div>
+
+          <div id="diffBreadcrumbs" class="breadcrumbs"></div>
+
+          <div id="explorer">
+            <div style="max-width:600px;margin:40px auto;text-align:center;">
+              <h2>Welcome to Multi-Cloud JSON Explorer</h2>
+
+              <!-- === Top Card Row (2 cards side by side) === -->
+              <div class="card-row">
+                <!-- 🚀 Quick Start -->
+                <div class="info-card">
+                  <h3>🚀 Quick Start</h3>
+                  <ul>
+                    <li>Select a <strong>Cloud Provider</strong> from the sidebar.</li>
+                    <li>Upload two snapshots to <strong>Compare Drift</strong>.</li>
+                    <li>View <strong>Insights & Executive Summaries</strong> for cost, compliance, and risk.</li>
+                  </ul>
+                  <p class="tip">💡 Tip: Try Azure or AWS first.</p>
+                </div>
+              
+                <!-- 🧰 Helper Scripts -->
+                <div class="info-card">
+                  <h3>🧰 Helper Scripts</h3>
+                  <p>Use these scripts to collect your environment inventory before comparing snapshots.</p>
+                  <div class="button-group">
+                    <a href="https://mystoretore.blob.core.windows.net/helpers/azure_discovery.py" download>🔹 Azure Discovery Script</a>
+                    <a href="https://mystoretore.blob.core.windows.net/helpers/aws_discovery.py" download>🟧 AWS Discovery Script</a>
+                    <a href="https://mystoretore.blob.core.windows.net/helpers/gcp_discovery.py" download>🔵 Google Cloud Script</a>
+                  </div>
+              
+                  <details>
+                    <summary>How to Use</summary>
+                    <pre>
+              # 1️⃣ Download a helper script (e.g. azure_discovery.py)
+              # 2️⃣ Run the script (Azure Example)
+              python ./azure_discovery.py
+              
+              # 3️⃣ The script generates: azure_inventory_{timestamp}.json
+              # 4️⃣ Upload two snapshots and click “Compare Now”
+                    </pre>
+                  </details>
+                </div>
+              </div>
+              
+              <!-- === Bottom Card (Centered) === -->
+              <div id="compareResult">
+                <h3>📊 Compare Inventories (Drift)</h3>
+                <div class="compare-inputs">
+                  <input type="file" id="file1" accept="application/json">
+                  <input type="file" id="file2" accept="application/json">
+                </div>
+                <button onclick="compareInventories()">Compare Now</button>
+              </div>
+            </div>
+          </div>
+          
+          <div id="spinner" style="display:none;text-align:center;margin:20px;">
+            <div class="loader"></div>
+              <p>Loading data, please wait...</p>
+          </div>
+
+          <section id="details">
+            <h2 id="op-title">Operation</h2>
+            <p><em id="op-help"></em></p>
+            <div id="provider-tools" style="margin-bottom:10px;">
+              <button onclick="downloadProviderJSON()">Download Provider JSON</button>
+            </div>
+            <div id="form-container"></div>
+            <pre id="json-display">No JSON loaded yet...</pre>
+            <pre id="cli-display">No CLI generated yet...</pre>
+            <div>
+              <button onclick="copyJSON()">Copy JSON</button>
+              <button onclick="downloadJSON()">Download JSON</button>
+              <button onclick="copyCLI()">Copy CLI</button>
+            </div>
+          </section>
+        </div>
+      </main>
+
+      <script src="https://unpkg.com/lucide@latest"></script>
+      <script>
+        window._diffTrail = [];
+        /* ---------- Render breadcrumbs ---------- */
+        function renderDiffBreadcrumbs(target) {
+          const bc = document.getElementById("diffBreadcrumbs");
+          if (!bc) return;
+        
+          bc.innerHTML = "";
+        
+          window._diffTrail.forEach((crumb, idx) => {
+            const span = document.createElement("span");
+            span.textContent = crumb.label;
+            span.onclick = () => {
+              // trim trail back to this point
+              window._diffTrail = window._diffTrail.slice(0, idx + 1);
+              crumb.render(); // call the stored render function
+            };
+            bc.appendChild(span);
+        
+            if (idx < window._diffTrail.length - 1) {
+              const sep = document.createElement("span");
+              sep.textContent = "›";
+              sep.className = "sep";
+              bc.appendChild(sep);
+            }
+          });
+        }
+
+        /* --------------------------- globals / state --------------------------- */
+        let mode = "provider";                // "provider" | "control"
+        let providerCommandIndex = null;      // flattened commands across providers
+        let controlToCommands = {};           // { "AC-1": { meta, commands: [...] }, ... }
+      
+        let iconMap = {};
+        fetch("icon_map.json").then(r=>r.json()).then(d=>iconMap=d).catch(()=>{});
+      
+        const providers = [
+          { name:"Azure",        file:"providers/az.json",      key:"az",      bin:"az" },
+          { name:"AWS",          file:"providers/aws.json",     key:"aws",     bin:"aws" },
+          { name:"OCI",          file:"providers/oci.json",     key:"oci",     bin:"oci" },
+          { name:"Google Cloud", file:"providers/gcloud.json",  key:"gcloud",  bin:"gcloud" },
+          { name:"Alibaba Cloud",file:"providers/aliyun.json",  key:"aliyun",  bin:"aliyun" },
+          { name:"IBM Cloud",    file:"providers/ibmcloud.json",key:"ibmcloud",bin:"ibmcloud" },
+          { name:"OVHcloud AI",  file:"providers/ovhai.json",   key:"ovhai",   bin:"ovhai" },
+        ];
+
+        function openNarrativeModal(text) {
+          let content = "";
+        
+          // Detect if the text looks like a numbered list
+          if (/^\d+\./m.test(text)) {
+            // Format as ordered list
+            const items = text
+              .split(/\n(?=\d+\.)/) // split at each "1.", "2.", etc
+              .map(i => i.trim())
+              .filter(i => i.length > 0)
+              .map(i => `<li style="margin-bottom:10px; line-height:1.6;">${i.replace(/^\d+\.\s*/, "")}</li>`)
+              .join("");
+        
+            content = `<ol style="padding-left:20px;">${items}</ol>`;
+          } else {
+            // Otherwise fall back to paragraph formatting
+            const paras = text
+              .split(/\n\s*\n/)
+              .map(p => `<p style="margin:0 0 12px 0; line-height:1.6;">${p.trim()}</p>`)
+              .join("");
+            content = paras;
+          }
+        
+          document.getElementById("narrativeTextModal").innerHTML = content;
+          document.getElementById("narrativeModal").style.display = "block";
+        }
+       
+        function closeNarrativeModal() {
+          document.getElementById("narrativeModal").style.display = "none";
+        }
+       
+        async function maybeAddAzureDiscovery() {
+          try {
+            const resp = await fetch("providers/azure_discovery.json?ts=" + Date.now());
+            if (resp.ok) {
+              providers.push({
+                key: "azure-discovery",
+                name: "Azure Discovery Snapshot",
+                file: "providers/azure_discovery.json?ts=" + Date.now()
+              });
+              console.log("✅ Azure discovery enabled");
+            } else {
+              console.log("ℹ️ No Azure discovery data found, skipping.");
+            }
+          } catch (err) {
+            console.log("ℹ️ Azure discovery not available, skipping.");
+          }
+        }
+        
+        let controlsMapping = null;      // the loaded JSON
+        let controlsLoaded = false;      // has it finished successfully?
+        let controlsLoadingPromise = null; // in-flight promise guard
+        let commandToControls = null;
+
+        function showBanner(targetId, message, type="info") {
+          const icons = {
+            info: "ℹ️",
+            error: "❌",
+            warning: "⚠️",
+            success: "✅"
+          };
+          const footer = "This is a demo preview of the Multi-Cloud Explorer. Data, mappings, and functionality may be illustrative only.";
+          
+          const container = document.getElementById(targetId);
+          container.innerHTML = `
+            <div class="banner ${type}">
+              <div class="top"><span class="icon">${icons[type]}</span><span>${message}</span></div>
+              <div class="footer">${footer}</div>
+            </div>
+          `;
+        }
+        
+        /* ----------------------------- debounce ------------------------------- */
+        function debounce(fn, delay = 250) {
+          let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), delay); };
+        }
+      
+        /* -------------------------- provider indexing ------------------------- */
+        function flattenCommands(root, prefix = []) {
+          const out = [];
+          const sub = root?.subcommands || {};
+          for (const [key, node] of Object.entries(sub)) {
+            const path = [...prefix, key];
+            const fullCmd = path.join(" ");
+            out.push({ fullCmd, help: node.help || "", name: key });
+            if (node.subcommands && Object.keys(node.subcommands).length) {
+              out.push(...flattenCommands(node, path));
+            }
+          }
+          return out;
+        }
+      
+        async function buildProviderIndex() {
+          if (providerCommandIndex && providerCommandIndex.length > 0) {
+            return providerCommandIndex;
+          }
+        
+          providerCommandIndex = [];
+        
+          for (const p of providers) {
+            try {
+              const resp = await fetch(p.file, { cache: "no-cache" });
+              if (!resp.ok) continue;
+              const tree = await resp.json();
+              const root = tree[p.key] || tree.subcommands || tree;
+              const flat = flattenCommands(root);
+              flat.forEach(item => {
+                providerCommandIndex.push({
+                  provider: p.key,
+                  fullCmd: item.fullCmd,
+                  help: item.help || "",
+                  name: item.name,
+                });
+              });
+            } catch (err) {
+              console.warn(`Failed to load provider ${p.name}:`, err);
+            }
+          }
+        
+          console.log(`✅ Provider index built with ${providerCommandIndex.length} commands`);
+          return providerCommandIndex;
+        }
+              
+        /* -------------------------- controls reverse idx ---------------------- */
+        async function buildReverseIndex() {
+          console.log("🔁 Building reverse index across all providers...");
+          controlToCommands = {}; // reset
+        
+          // Load each provider’s mapping
+          const providerKeys = ["az", "aws", "gcloud", "oci", "ovhai", "aliyun", "ibmcloud"];
+
+        
+          for (const providerKey of providerKeys) {
+            const mapping = await loadProviderMapping(providerKey);
+            if (!mapping) continue;
+        
+            for (const [cmdKey, entry] of Object.entries(mapping)) {
+              if (!entry.matched_controls?.length) continue;
+        
+              const [prov, fullCmd] = cmdKey.split(":");
+              const help = entry.help || "";
+        
+              for (const ctrl of entry.matched_controls) {
+                if (!controlToCommands[ctrl.id]) {
+                  controlToCommands[ctrl.id] = { meta: ctrl, commands: [] };
+                }
+                controlToCommands[ctrl.id].commands.push({ provider: prov, fullCmd, help });
+              }
+            }
+          }
+        
+          console.log(`✅ Reverse index built (${Object.keys(controlToCommands).length} controls)`);
+        }
+
+        /* ------------------------------ provider search ------------------------------ */
+        async function searchProviders(query) {
+          const ex = document.getElementById("explorer");
+          const q = query.trim().toLowerCase();
+          ex.innerHTML = "<h3>Search Results</h3>";
+        
+          // Ensure provider index is built
+          await buildProviderIndex();
+        
+          const matches = providerCommandIndex.filter(item =>
+            item.name.toLowerCase().includes(q) ||
+            item.fullCmd.toLowerCase().includes(q) ||
+            item.help.toLowerCase().includes(q) ||
+            item.provider.toLowerCase().includes(q)
+          );
+        
+          if (matches.length === 0) {
+            ex.innerHTML += "<p>No matches found.</p>";
+            return;
+          }
+        
+          matches.slice(0, 200).forEach(match => {
+            const card = document.createElement("div");
+            card.className = "command-card";
+            card.innerHTML = `
+              <strong>${match.provider.toUpperCase()}</strong> › ${match.fullCmd}<br>
+              <small>${match.help || ""}</small>
+            `;
+            card.onclick = async () => {
+              const provObj = providers.find(p => p.key === match.provider);
+              if (provObj) {
+                await loadProvider(provObj);
+                navigateTo(match.fullCmd.split(" "));
+              }
+            };
+            ex.appendChild(card);
+          });
+        }
+
+        async function searchControls(query) {
+          // Ensure mappings are loaded
+          await loadControlsMappingOnce();
+        
+          const nav = document.getElementById("nav");
+          nav.innerHTML = "<h3>Controls</h3>";
+        
+          const q = query.trim().toLowerCase();
+          if (!q) {
+            renderControlsNav();
+            return;
+          }
+        
+          const matches = Object.keys(controlToCommands).filter(ctrlId => {
+            const meta = controlToCommands[ctrlId].meta || {};
+            const family = (meta.family || "").toLowerCase();
+            const title = (meta.title || "").toLowerCase();
+            return (
+              ctrlId.toLowerCase().includes(q) ||
+              title.includes(q) ||
+              family.includes(q)
+            );
+          });
+        
+          if (matches.length === 0) {
+            nav.innerHTML += "<p style='padding:10px'>No controls found.</p>";
+            return;
+          }
+        
+          // ✅ Group matches by family
+          const grouped = {};
+          matches.forEach(id => {
+            const meta = controlToCommands[id].meta || {};
+            const fam = meta.family || id.split("-")[0].toUpperCase();
+            if (!grouped[fam]) grouped[fam] = [];
+            grouped[fam].push(id);
+          });
+        
+          Object.entries(grouped)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .forEach(([fam, ctrls]) => {
+              const famContainer = document.createElement("div");
+              famContainer.className = "control-nav-group";
+        
+              const header = document.createElement("div");
+              header.className = "control-nav-header";
+              header.textContent = fam;
+              famContainer.appendChild(header);
+        
+              const list = document.createElement("div");
+              list.className = "control-nav-list";
+              list.style.display = "block"; // expanded for search results
+        
+              ctrls.sort((a, b) => a.localeCompare(b)).forEach(ctrlId => {
+                const meta = controlToCommands[ctrlId].meta || {};
+                const card = document.createElement("div");
+                card.className = "control-nav-card";
+                card.textContent = `${ctrlId}${meta.title ? " – " + meta.title : ""}`;
+                card.onclick = () => renderCommandsForControl(ctrlId);
+                list.appendChild(card);
+              });
+        
+              famContainer.appendChild(list);
+              nav.appendChild(famContainer);
+            });
+        }
+        
+        /* ------------------------------ toggle btn ------------------------------ */
+        document.getElementById("mode-toggle").addEventListener("click", async ()=>{
+          const search = document.getElementById("search");
+          const explorer = document.getElementById("explorer");
+          search.value = "";
+          showBanner("explorer", "Select a provider or control to get started.", "info");
+      
+          if(mode === "provider"){
+            mode = "control";
+            document.getElementById("mode-toggle").textContent = "Switch to Provider Mode";
+            await buildReverseIndex();
+            renderControlsNav();
+          } else {
+            mode = "provider";
+            document.getElementById("mode-toggle").textContent = "Switch to Control Mode";
+            renderProviders();
+          }
+        });
+      
+        /* ------------------------- control mode sidebar ------------------------- */
+        function renderControlsNav() {
+          const nav = document.getElementById("nav");
+          nav.innerHTML = "<h3>Controls</h3>";
+        
+          const grouped = {};
+        
+          // ✅ Group by actual family name from meta
+          for (const ctrlId of Object.keys(controlToCommands)) {
+            const meta = controlToCommands[ctrlId].meta || {};
+            const fam = meta.family || ctrlId.split("-")[0].toUpperCase(); // fallback if missing
+            if (!grouped[fam]) grouped[fam] = [];
+            grouped[fam].push(ctrlId);
+          }
+        
+          // ✅ Sort families alphabetically
+          const sortedFamilies = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
+        
+          sortedFamilies.forEach(fam => {
+            const famContainer = document.createElement("div");
+            famContainer.className = "control-nav-group";
+        
+            const header = document.createElement("div");
+            header.className = "control-nav-header";
+            header.textContent = fam;
+            famContainer.appendChild(header);
+        
+            const list = document.createElement("div");
+            list.className = "control-nav-list";
+            list.style.display = "none";
+        
+            grouped[fam]
+              .sort((a, b) => a.localeCompare(b))
+              .forEach(ctrlId => {
+                const meta = controlToCommands[ctrlId].meta || {};
+                const card = document.createElement("div");
+                card.className = "control-nav-card";
+                card.textContent = `${ctrlId}${meta.title ? " – " + meta.title : ""}`;
+                card.onclick = () => renderCommandsForControl(ctrlId);
+                list.appendChild(card);
+              });
+        
+            famContainer.appendChild(list);
+            nav.appendChild(famContainer);
+        
+            header.addEventListener("click", () => {
+              list.style.display = list.style.display === "none" ? "block" : "none";
+            });
+          });
+        }
+        
+        function renderCommandsForControl(ctrlId){
+          const ex = document.getElementById("explorer");
+          const meta = controlToCommands[ctrlId]?.meta || {};
+          ex.innerHTML = `<h2>${ctrlId}${meta.title ? " – " + meta.title : ""}</h2>`;
+      
+          const list = controlToCommands[ctrlId]?.commands || [];
+          if (list.length === 0) {
+            ex.innerHTML += `<p>No commands mapped for ${ctrlId}</p>`;
+            return;
+          }
+      
+          list.forEach(item => {
+            const card = document.createElement("div");
+            card.className = "drill-card leaf";
+            card.style.maxWidth = "800px";
+            card.innerHTML = `<h4>${item.provider}: ${item.fullCmd}</h4>
+                              <p class="meta">${item.help || ""}</p>`;
+            card.onclick = () => {
+              const provObj = providers.find(p => p.key === item.provider);
+              if (provObj) loadProvider(provObj).then(() => navigateTo(item.fullCmd.split(" ")));
+            };
+            ex.appendChild(card);
+          });
+        }
+      
+        /* ------------------------------ providers UI ---------------------------- */
+        function renderProviders(){
+          const nav=document.getElementById("nav");
+          nav.innerHTML="<h3>Cloud Providers</h3>";
+          console.log("Rendering providers:", providers);
+          providers.forEach(p=>{
+            const card=document.createElement("div");
+            card.className=`provider-card ${p.key}`;
+            card.style.color = "white"; // force visible
+            card.style.padding = "8px";
+            card.style.cursor = "pointer";
+            card.textContent=p.name;
+            card.onclick=()=>loadProvider(p);
+            nav.appendChild(card);
+          });
+        }
+        
+        let currentProvider=null,currentTree=null,rootNode=null,path=[];
+        const isLeaf=n=>!n||!n.subcommands||Object.keys(n.subcommands).length===0;
+        function nodeFromPath(root,arr){let n=root;for(const seg of arr){if(!n.subcommands||!n.subcommands[seg])return null;n=n.subcommands[seg];}return n;}
+        function fullCmdFromPath(arr){return arr.join(" ");}
+      
+        async function loadProvider(provider){
+          currentProvider = provider;
+          path = [];
+        
+          try {
+            const resp = await fetch(provider.file);
+            if (!resp.ok) throw new Error("HTTP error " + resp.status);
+            currentTree = await resp.json();
+        
+            if (provider.key === "azure-discovery") {
+              rootNode = currentTree.subscriptions;
+            } else {
+              rootNode = currentTree[provider.key] || currentTree.subcommands || currentTree;
+            }
+        
+            navigateTo([]);
+          } catch (e) {
+            console.error("Provider load failed", e);
+            document.getElementById("explorer").innerHTML =
+              `<p style="color:red">Failed to load ${provider.file}</p>`;
+          }
+        }
+
+        function navigateTo(newPath) {
+          path = [...newPath];
+          let node = rootNode;
+        
+          try {
+            if (currentProvider?.key === "azure-discovery") {
+              if (newPath.length === 0) {
+                node = rootNode; // back to subscriptions list
+              } else {
+                for (let i = 0; i < path.length; i++) {
+                  const seg = path[i];
+                  if (!node) break;   // bail if structure mismatch
+                  if (i === 0) {
+                    node = node[seg]; // subscription
+                  } else if (i === 1) {
+                    node = node.services?.[seg]; // service
+                  } else if (i === 2) {
+                    node = node[seg]; // resource type
+                  } else if (i === 3) {
+                    // resource name → details handled elsewhere
+                  }
+                }
+              }
+            } else {
+              node = nodeFromPath(rootNode, path);
+            }
+        
+            renderBreadcrumb();
+            renderExplorer(node);
+        
+            if (currentProvider?.key !== "azure-discovery") {
+              if (isLeaf(node)) showDetails(node);
+              else resetDetailsPanel();
+            }
+          } catch (err) {
+            console.error("Navigation error", err, { path, node });
+            document.getElementById("explorer").innerHTML =
+              `<p style="color:red">Navigation error at path [${path.join(" › ")}]</p>`;
+          }
+        }
+        
+        function renderBreadcrumb() {
+          const bc = document.getElementById("breadcrumb");
+          bc.innerHTML = "";
+        
+          if (!currentProvider) return;
+        
+          // Add provider name first
+          const prov = document.createElement("span");
+          prov.textContent = currentProvider.name;
+          prov.className = `crumb ${path.length === 0 ? "current" : ""}`;
+          if (path.length > 0) prov.onclick = () => navigateTo([]);
+          bc.appendChild(prov);
+        
+          // ---------------- Azure Discovery Breadcrumbs ----------------
+          if (currentProvider.key === "azure-discovery") {
+            path.forEach((seg, i) => {
+              const sep = document.createElement("span");
+              sep.textContent = "›";
+              sep.className = "sep";
+              bc.appendChild(sep);
+          
+              let label = seg;
+              if (i === 0) label = rootNode[seg]?.name || seg; // subscription
+              else if (i === 1) label = seg;                    // service
+              else if (i === 2) label = seg;                    // resource type
+              else if (i === 3) label = seg;                    // resource name
+          
+              const s = document.createElement("span");
+              s.textContent = label;
+              s.className = `crumb ${i === path.length - 1 ? "current" : ""}`;
+              if (i !== path.length - 1) {
+                s.onclick = () => navigateTo(path.slice(0, i + 1));
+              }
+              bc.appendChild(s);
+            });
+            return;
+          }
+           
+          // ---------------- CLI Provider Breadcrumbs ----------------
+          path.forEach((seg, i) => {
+            const sep = document.createElement("span");
+            sep.textContent = "›";
+            sep.className = "sep";
+            bc.appendChild(sep);
+        
+            const s = document.createElement("span");
+            s.textContent = seg;
+            s.className = `crumb ${i === path.length - 1 ? "current" : ""}`;
+            if (i !== path.length - 1) s.onclick = () => navigateTo(path.slice(0, i + 1));
+            bc.appendChild(s);
+          });
+        }
+
+        async function renderExplorer(node) {
+          const ex = document.getElementById("explorer");
+          ex.innerHTML = "";
+        
+          // ---------- Azure Discovery mode ----------
+          if (currentProvider?.key === "azure-discovery") {
+            if (path.length === 0) {
+              const subs = Object.entries(rootNode || {});
+              subs.sort(([idA, a], [idB, b]) => (a?.name || idA).localeCompare(b?.name || idB));
+              subs.forEach(([subId, subObj]) => {
+                const displayName = subObj?.name || subId;
+                const card = document.createElement("div");
+                card.className = "drill-card group";
+                card.innerHTML = `<h4 style="margin:0">${displayName}</h4><p class="meta" style="margin:4px 0 0 0">${subId}</p>`;
+                card.onclick = () => navigateTo([subId]);
+                ex.appendChild(card);
+              });
+              return;
+            }
+        
+            if (path.length === 1) {
+              const services = rootNode?.[path[0]]?.services || {};
+              Object.keys(services).sort().forEach(svc => {
+                const card = document.createElement("div");
+                card.className = "drill-card group";
+                card.innerHTML = `<h4 style="margin:0">${svc}</h4>`;
+                card.onclick = () => navigateTo([...path, svc]);
+                ex.appendChild(card);
+              });
+              return;
+            }
+        
+            if (path.length === 2) {
+              const service = rootNode?.[path[0]]?.services?.[path[1]] || {};
+              Object.keys(service).sort().forEach(rtype => {
+                const card = document.createElement("div");
+                card.className = "drill-card group";
+                card.innerHTML = `<h4 style="margin:0">${rtype}</h4>`;
+                card.onclick = () => navigateTo([...path, rtype]);
+                ex.appendChild(card);
+              });
+              return;
+            }
+        
+            if (path.length === 3) {
+              const resources = rootNode?.[path[0]]?.services?.[path[1]]?.[path[2]] || [];
+              resources.forEach(res => {
+                const card = document.createElement("div");
+                card.className = "drill-card leaf";
+                card.innerHTML = `<h4 style="margin:0">${res.name}</h4><p class="meta" style="margin:4px 0 0 0">${res.type || ""}</p>`;
+                card.onclick = () => {
+                  navigateTo([...path, res.name]);
+                  showResourceDetails(res);
+                };
+                ex.appendChild(card);
+              });
+              return;
+            }
+        
+            return;
+          }
+        
+          // ---------- CLI providers ----------
+          if (!node || isLeaf(node)) {
+            const fullCmd = fullCmdFromPath(path);
+            const header = document.createElement("div");
+            header.style.margin = "6px 0 14px 0";
+            header.innerHTML = `
+              <div class="meta" style="font-size:14px;color:#111827;">
+                <strong>${node?.command || fullCmd || "Command"}</strong>
+              </div>
+              <div class="meta" style="margin-top:4px;">${node?.help || ""}</div>`;
+            ex.appendChild(header);
+            if (currentProvider) await renderMatchedControls(ex, currentProvider.key, fullCmd);
+            return;
+          }
+          
+          // 🔹 FIX: define keys before using
+          const keys = Object.keys(node.subcommands || {});
+          keys.forEach(key => {
+            const sub = node.subcommands[key];
+            const group = !isLeaf(sub);
+            const card = document.createElement("div");
+            card.className = `drill-card ${group ? "group" : "leaf"}`;
+            const icon = iconMap[key] || (group ? "folder" : "terminal");
+            card.innerHTML = `
+              <h4 style="margin:0 0 6px 0;display:flex;align-items:center;gap:8px">
+                <i data-lucide="${icon}"></i> ${key} ${group ? '<span class="meta">›</span>' : ""}
+              </h4>
+              <p class="meta" style="margin:0">${sub.help || ""}</p>`;
+            card.onclick = () => { navigateTo([...path, key]); if (window.lucide?.createIcons) lucide.createIcons(); };
+            ex.appendChild(card);
+          });
+          
+          if (window.lucide?.createIcons) lucide.createIcons();
+        }
+
+        /* --------- Robust JSON renderer (uses JSONFormatter if available) ---------- */
+        function renderJSON(obj, opts={theme:"dark"}) {
+          try {
+            if (window.JSONFormatter) {
+              const f = new JSONFormatter(obj, 2, {
+                theme: opts.theme || "dark",
+                hoverPreviewEnabled: true,
+                hoverPreviewArrayCount: 50,
+                hoverPreviewFieldCount: 8
+              });
+              return f.render();
+            }
+          } catch(_) {}
+          const pre = document.createElement("pre");
+          pre.textContent = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+          return pre;
+        }
+        
+        /* ----------------------- Utility for getting a title ----------------------- */
+        function pickTitle(item) {
+          const fromValue = (k) =>
+            item?.value && typeof item.value === "object" && (item.value[k] || item.value?.properties?.[k]);
+          return (
+            item?.name ||
+            item?.id ||
+            fromValue("name") ||
+            fromValue("id") ||
+            (item?.path ? item.path.split(".").slice(-1)[0] : "Resource")
+          );
+        }
+        
+        async function uploadOne(file) {
+          const fd = new FormData();
+          fd.append("file", file);
+          const r = await fetch("/upload", { method: "POST", body: fd });
+          if (!r.ok) throw new Error("upload failed");
+          return (await r.json()).id; // returns a server-side token/path
+        }
+
+        async function gzipFile(file) {
+          // Read file into ArrayBuffer
+          const buf = await file.arrayBuffer();
+          // Compress with pako
+          const compressed = pako.gzip(new Uint8Array(buf));
+          // Return a new Blob marked as gzip
+          return new Blob([compressed], { type: "application/gzip" });
+        }
+       
+        async function compareInventories() {
+          const file1 = document.querySelector("#file1").files[0];
+          const file2 = document.querySelector("#file2").files[0];
+          const ex = document.getElementById("explorer");
+          const spinner = document.getElementById("spinner");
+        
+          if (!file1 || !file2) {
+            alert("Please select two files");
+            return;
+          }
+        
+          ex.innerHTML = "";
+          spinner.style.display = "block";
+        
+          try {
+            console.log("Compressing files...");
+        
+            // compress both files
+            const [gz1, gz2] = await Promise.all([gzipFile(file1), gzipFile(file2)]);
+        
+            // ✅ Debug size info here
+            console.log(
+              `File1 compressed from ${(file1.size / 1e6).toFixed(1)} MB → ${(gz1.size / 1e6).toFixed(1)} MB`
+            );
+            console.log(
+              `File2 compressed from ${(file2.size / 1e6).toFixed(1)} MB → ${(gz2.size / 1e6).toFixed(1)} MB`
+            );
+        
+            const formData = new FormData();
+            formData.append("file1", gz1, file1.name + ".gz");
+            formData.append("file2", gz2, file2.name + ".gz");
+        
+            const res = await fetch("/compare", { method: "POST", body: formData });
+            const data = await res.json();
+        
+            spinner.style.display = "none";
+        
+            if (data.error) {
+              ex.innerHTML = `<div class="error">❌ ${data.error}</div>`;
+              return;
+            }
+        
+            window._lastDiffData = data;
+            renderDiffExplorer(data, ex);
+          } catch (err) {
+            spinner.style.display = "none";
+            ex.innerHTML = `<div class="error">❌ Failed: ${err.message}</div>`;
+          }
+        }
+        
+        function renderDiffExplorer(diffData, container) {
+          window._lastDiffData = diffData;
+          window._diffTrail = [{ label: "Inventory Comparison", render: () => renderDiffExplorer(diffData, container) }];
+          renderDiffBreadcrumbs();
+        
+          container.innerHTML = "";
+        
+          const counts = {
+            added:   diffData.added?.length   || 0,
+            removed: diffData.removed?.length || 0,
+            changed: diffData.changed?.length || 0
+          };
+        
+          // Header summary
+          const hdr = document.createElement("div");
+          hdr.innerHTML = `
+            <h2 style="margin:0 0 8px 0;">📊 Inventory Comparison</h2>
+            <div class="pill green">Added: ${counts.added}</div>
+            <div class="pill orange" style="margin-left:8px;">Changed: ${counts.changed}</div>
+            <div class="pill red" style="margin-left:8px;">Removed: ${counts.removed}</div>
+          `;
+          container.appendChild(hdr);
+        
+          // 👉 Inject the button + narrative container here
+          const controls = document.createElement("div");
+          controls.innerHTML = `
+            <button id="generateNarrativeBtn"
+                    style="margin-top:1rem; background:#0078d4; color:#fff; border:none;
+                           padding:6px 12px; border-radius:4px; cursor:pointer;">
+              🧠 Generate Executive Summary
+            </button>
+          `;
+
+          container.appendChild(controls);
+          document.getElementById("closeAnalysisBtn").addEventListener("click", () => {
+            const section = document.getElementById("analysisSection");
+            section.style.display = "none";
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          });
+
+          document.getElementById("generateNarrativeBtn")?.addEventListener("click", async () => {
+            if (!window._lastDiffData) return;
+          
+            const section = document.getElementById("analysisSection");
+            section.style.display = "block";
+          
+            const spinner = document.getElementById("spinner");
+            spinner.style.display = "block";   // 🔹 show spinner
+          
+            try {
+              const resp = await fetch("/analyze", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(window._lastDiffData),
+              });
+              if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+              const analysis = await resp.json();
+          
+              renderAnalysis(analysis);
+          
+              if (analysis.narrative) {
+                openNarrativeModal(analysis.narrative);
+              }
+            } catch (err) {
+              alert("Analysis failed: " + err.message);
+            } finally {
+              spinner.style.display = "none";  // 🔹 always hide spinner at the end
+            }
+          });
+          
+          // Render Added / Changed / Removed sections
+          const sections = [
+            { key: "added",   label: "➕ Added",   color: "green"  },
+            { key: "changed", label: "🔄 Changed", color: "orange" },
+            { key: "removed", label: "➖ Removed", color: "red"    },
+          ];
+        
+          sections.forEach(({ key, label, color }) => {
+            const arr = diffData[key] || [];
+            if (!arr.length) return;
+        
+            const block = document.createElement("div");
+            block.className = "diff-section";
+            block.innerHTML = `<h3 style="margin:12px 0;color:${color}">${label} (${arr.length})</h3>`;
+        
+            const grid = document.createElement("div");
+            grid.className = "diff-grid";
+        
+            arr.slice(0, 500).forEach(item => {
+              const card = document.createElement("div");
+              card.className = "diff-card";
+              const title = pickTitle(item);
+              const path  = item?.path || "";
+        
+              card.innerHTML = `
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                  <div style="font-weight:600">${title}</div>
+                  <span class="pill ${color}">${key.toUpperCase()}</span>
+                </div>
+                ${path ? `<div class="diff-path" title="${path}">${path}</div>` : ""}
+              `;
+              card.onclick = () => showDiffDetail(item, key, container, { label, color });
+              grid.appendChild(card);
+            });
+        
+            block.appendChild(grid);
+            container.appendChild(block);
+          });
+        }
+        
+        function showDiffDetail(item, key, container, section) {
+          container.innerHTML = "";
+        
+          window._diffTrail.push({
+            label: section.label + " • " + (pickTitle(item) || "Detail"),
+            render: () => showDiffDetail(item, key, container, section)
+          });
+          renderDiffBreadcrumbs();
+        
+          const bar = document.createElement("div");
+          bar.className = "backbar";
+          const back = document.createElement("button");
+          back.textContent = "⬅ Back";
+          back.onclick = () => renderDiffExplorer(window._lastDiffData, container);
+          bar.appendChild(back);
+          container.appendChild(bar);
+        
+          const h = document.createElement("h3");
+          h.style.color = section.color;
+          h.textContent = `${section.label} • ${pickTitle(item)}`;
+          container.appendChild(h);
+        
+          if (key === "changed") {
+            const wrap = document.createElement("div");
+            wrap.style.display = "grid";
+            wrap.style.gridTemplateColumns = "1fr 1fr";
+            wrap.style.gap = "12px";
+        
+            const beforeBox = document.createElement("div");
+            beforeBox.className = "json-detail-card";
+            beforeBox.innerHTML = "<h4>Before</h4>";
+            beforeBox.appendChild(renderJSON(item.old_value ?? item.before ?? {}));
+        
+            const afterBox = document.createElement("div");
+            afterBox.className = "json-detail-card";
+            afterBox.innerHTML = "<h4>After</h4>";
+            afterBox.appendChild(renderJSON(item.new_value ?? item.after ?? {}));
+        
+            wrap.appendChild(beforeBox);
+            wrap.appendChild(afterBox);
+            container.appendChild(wrap);
+            return;
+          }
+        
+          const panel = document.createElement("div");
+          panel.className = "json-detail-card";
+          panel.appendChild(renderJSON(item.value ?? item.after ?? item.before ?? item));
+          container.appendChild(panel);
+        }
+
+        window.compareInventories = compareInventories;
+
+        // cache per-provider JSON so we don't reload it repeatedly
+        const providerCache = {};
+        
+        async function loadProviderMapping(providerKey) {
+          if (providerCache[providerKey]) return providerCache[providerKey];
+          const filename = `${providerKey}_command_to_controls.json.gz`;
+        
+          try {
+            const response = await fetch(filename);
+            if (!response.ok) throw new Error(`Failed to fetch ${filename}`);
+        
+            const encoding = response.headers.get("content-encoding") || "";
+            let text;
+        
+            if (encoding.includes("gzip")) {
+              // already decompressed by the browser — no manual step needed
+              text = await response.text();
+            } else {
+              // only decompress manually if server didn't set gzip
+              const decompressed = await new Response(
+                response.body.pipeThrough(new DecompressionStream("gzip"))
+              ).text();
+              text = decompressed;
+            }
+        
+            const json = JSON.parse(text);
+            providerCache[providerKey] = json;
+            return json;
+          } catch (err) {
+            console.error("❌ Error loading mapping:", err);
+            return null;
+          }
+        }
+        
+        async function renderMatchedControls(container, providerKey, fullCmd) {
+          const commandToControls = await loadProviderMapping(providerKey);
+          if (!commandToControls) return;
+        
+          const wrap = document.createElement("div");
+          wrap.id = "matches-panel";
+        
+          const h = document.createElement("h3");
+          h.textContent = "Matched Controls";
+          wrap.appendChild(h);
+        
+          const cmdKey = `${providerKey}:${fullCmd}`;
+          const entry = commandToControls[cmdKey];
+        
+          if (entry && entry.matched_controls?.length) {
+            const grid = document.createElement("div");
+            grid.className = "controls-grid";
+        
+            entry.matched_controls.forEach(ctrl => grid.appendChild(controlCard(ctrl)));
+            wrap.appendChild(grid);
+        
+            // 🧠 AI Summary — combine all narratives
+            const allNarratives = entry.matched_controls
+              .map(c => c.ai_context?.narrative_seed)
+              .filter(Boolean)
+              .join(" ");
+        
+            if (allNarratives) {
+              const summary = document.createElement("div");
+              summary.className = "ai-summary";
+              summary.innerHTML = `<h4>🧠 AI Summary</h4><p>${allNarratives}</p>`;
+              wrap.appendChild(summary);
+            }
+          } else {
+            const p = document.createElement("p");
+            p.className = "meta";
+            p.textContent = "No mapped controls found for this command.";
+            wrap.appendChild(p);
+          }
+        
+          container.appendChild(wrap);
+        }
+        
+        
+        function showResourceDetails(res) {
+          const details = document.getElementById("details");
+          details.style.display = "block";
+        
+          document.getElementById("op-title").innerText = res.name || "Resource";
+          document.getElementById("op-help").innerText = res.type || "";
+        
+          // 🔹 clear stale fields
+          document.getElementById("form-container").innerHTML = "";
+          document.getElementById("json-display").innerText = JSON.stringify(res, null, 2);
+          const cli = document.getElementById("cli-display");
+          cli.innerText = "No CLI for discovery";
+          cli.dataset.cli = "";
+        }
+       
+        function controlCard(ctrl){
+          const card = document.createElement("div");
+          card.className = "control-card";
+          const scorePct = (ctrl.match_score * 100).toFixed(1);
+        
+          const ai = ctrl.ai_context || null;
+          
+          const aiBlock = ai ? `
+            <div class="ai-card">
+              <div class="ai-header">
+                <span class="ai-relation">${ai.relation?.toUpperCase() || "INSIGHT"}</span>
+                <span class="ai-control">${ctrl.id.toUpperCase()} – ${ctrl.title}</span>
+              </div>
+              <div class="ai-body">
+                ${ai.narrative_seed
+                  ? ai.narrative_seed
+                      .replace(/Intent:/gi, '<p class="ai-intent"><strong>Intent:</strong>')
+                      .replace(/Evidence:/gi, '</p><p class="ai-evidence"><strong>Evidence:</strong>')
+                      .concat('</p>')
+                  : "<p>No AI narrative available.</p>"
+                }
+                ${ai.potential_action ? `<p class="ai-action"><em>${ai.potential_action}</em></p>` : ""}
+              </div>
+              <div class="ai-footer">
+                ${ai.confidence
+                  ? `<div class="ai-progress"><div class="ai-bar" style="width:${(ai.confidence * 100).toFixed(1)}%;"></div></div>`
+                  : ""}
+                <span class="ai-confidence">Confidence ${(ai.confidence * 100).toFixed(1)}%</span>
+              </div>
+            </div>
+          ` : "";
+          
+          card.innerHTML = `
+            <div class="control-card-inner">
+              <div class="control-card-front">
+                <div><strong>${ctrl.id.toUpperCase()}</strong></div>
+                <div class="meta">${ctrl.title}</div>
+                <div class="family">${ctrl.family || ""}</div>
+              </div>
+              <div class="control-card-back">
+                <div><strong>${ctrl.id}</strong> – ${ctrl.title}</div>
+                <div><em>Family: ${ctrl.family || "N/A"}</em></div>
+                <div style="margin-top:6px;"><strong>Description:</strong><br>${ctrl.description || "No description"}</div>
+                <div style="margin-top:6px;"><strong>Score:</strong> ${isNaN(scorePct)? "N/A" : scorePct + "%"}</div>
+                ${aiBlock}
+              </div>
+            </div>
+          `;
+        
+          card.addEventListener("click", () => card.classList.toggle("flipped"));
+          return card;
+        }
+
+        /* ------------------------------ details panel --------------------------- */
+        function resetDetailsPanel(){
+          const details=document.getElementById("details"); details.style.display="none";
+          document.getElementById("op-title").innerText="Operation";
+          document.getElementById("op-help").innerText="";
+          document.getElementById("form-container").innerHTML="";
+          document.getElementById("json-display").innerText="No JSON loaded yet...";
+          const cli=document.getElementById("cli-display"); cli.innerText="No CLI generated yet..."; cli.dataset.cli="";
+        }
+    
+        function showDetails(node) {
+          if (!node) {
+            console.warn("showDetails called with null node", path);
+            return;
+          }
+        
+          const details = document.getElementById("details");
+          details.style.display = "block";
+        
+          const fullCmd = fullCmdFromPath(path);
+          document.getElementById("op-title").innerText =
+            node.command || fullCmd || "Operation";
+          document.getElementById("op-help").innerText = node.help || "";
+        
+          // clear panel
+          const formContainerEl = document.getElementById("form-container");
+          formContainerEl.innerHTML = "";
+          document.getElementById("json-display").innerText = "{ }";
+        
+          // CLI baseline
+          const cli = document.getElementById("cli-display");
+          const baseCmd = `${currentProvider?.bin || ""} ${fullCmd}`.trim();
+          cli.innerText = baseCmd || "No CLI generated yet...";
+          cli.dataset.cli = baseCmd;
+        
+          // normalize options
+          let opts = node.options || node.arguments || node.flags || {};
+          if (Array.isArray(opts)) {
+            opts = Object.fromEntries(
+              opts.map(o =>
+                typeof o === "string"
+                  ? [o, { help: "" }]
+                  : [o.flag || o.name || String(o), { help: o.help || "" }]
+              )
+            );
+          }
+        
+          if (opts && Object.keys(opts).length > 0) {
+            for (const [opt, info] of Object.entries(opts)) {
+              const f = document.createElement("div");
+              f.className = "form-field";
+              f.innerHTML = `
+                <label>${opt} – ${info.help || ""}</label>
+                <input type="text" id="field-${opt}" placeholder="value for ${opt}">
+              `;
+              formContainerEl.appendChild(f);
+            }
+        
+            const btn = document.createElement("button");
+            btn.textContent = "Generate JSON + CLI";
+            btn.onclick = () => {
+              const args = [];
+              const payload = [];
+        
+              for (const [opt] of Object.entries(opts)) {
+                const v = document.getElementById(`field-${opt}`).value.trim();
+                if (v) {
+                  args.push(v);
+                  payload.push({ [opt]: v });
+                }
+              }
+        
+              document.getElementById("json-display").innerText =
+                JSON.stringify(payload, null, 2);
+        
+              let cmd = baseCmd;
+              if (args.length) cmd += " " + args.join(" ");
+              cli.innerText = cmd;
+              cli.dataset.cli = cmd;
+            };
+            formContainerEl.appendChild(btn);
+          } else {
+            // No options → still usable CLI
+            const p = document.createElement("p");
+            p.className = "meta";
+            p.textContent = "This command has no options.";
+            formContainerEl.appendChild(p);
+          }
+        }
+       
+        let lastCompareData = null; // keep last compare data for reuse
+        
+        async function analyzeResults(compareData) {
+          lastCompareData = compareData; // save for narrative call later
+          const section = document.getElementById("analysisSection");
+          section.style.display = "block";   // ✅ always show panel, so button is visible
+        
+          try {
+            const response = await fetch("/analyze", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(compareData)
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const analysis = await response.json();
+            renderAnalysis(analysis);
+          } catch (err) {
+            console.error("Analysis error:", err);
+            // fallback: keep section visible with message
+            document.getElementById("analysisSummary").innerHTML =
+              `<div style="color:red">❌ Analysis failed: ${err.message}</div>`;
+          }
+        }
+        
+        function renderAnalysis(analysis) {
+          document.getElementById("analysisSection").style.display = "block";
+        
+          const s = analysis.summary || { total_added:0, total_removed:0, total_changed:0, net_delta:0 };
+          document.getElementById("analysisSummary").innerHTML = `
+            <div class="card" style="background:#0a0; color:#fff; padding:1rem; border-radius:6px;">Added: ${s.total_added}</div>
+            <div class="card" style="background:#a00; color:#fff; padding:1rem; border-radius:6px;">Removed: ${s.total_removed}</div>
+            <div class="card" style="background:#fa0; color:#000; padding:1rem; border-radius:6px;">Changed: ${s.total_changed}</div>
+            <div class="card" style="background:#0078d4; color:#fff; padding:1rem; border-radius:6px;">Net Delta: ${s.net_delta}</div>
+          `;
+        
+          const insightsList = document.getElementById("insightsList");
+          insightsList.innerHTML = "";
+          (analysis.insights || []).forEach(i => {
+            const li = document.createElement("li");
+            li.textContent = i;
+            insightsList.appendChild(li);
+          });
+        
+          const anomaliesList = document.getElementById("anomaliesList");
+          anomaliesList.innerHTML = "";
+          (analysis.anomalies || []).forEach(a => {
+            const li = document.createElement("li");
+            li.textContent = a;
+            anomaliesList.appendChild(li);
+          });
+        }
+        
+        /* ------------------------------- actions -------------------------------- */
+        function downloadProviderJSON(){
+          if(!currentProvider||!currentTree) return showToast("No provider loaded yet.","warning");
+          const blob=new Blob([JSON.stringify(currentTree,null,2)],{type:"application/json"});
+          const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+          a.download=`${currentProvider.key||currentProvider.name}.json`;a.click();
+        }
+        function copyJSON(){navigator.clipboard.writeText(document.getElementById("json-display").innerText).then(()=>showToast("JSON copied!","success"));}
+        function downloadJSON(){const text=document.getElementById("json-display").innerText;
+          const blob=new Blob([text],{type:"application/json"});const a=document.createElement("a");
+          a.href=URL.createObjectURL(blob);a.download="payload.json";a.click();}
+        function copyCLI(){const cli=document.getElementById("cli-display");
+          if(cli&&cli.dataset.cli&&cli.dataset.cli.trim()!==""){navigator.clipboard.writeText(cli.dataset.cli).then(()=>showToast("CLI command copied!","success"));}
+          else{showToast("No CLI command generated yet.","warning");}}
+      
+        function showToast(message, type="info"){
+          const c=document.getElementById("toast-container")||(()=>{const d=document.createElement("div");d.id="toast-container";document.body.appendChild(d);return d})();
+          const t=document.createElement("div"); t.className=`toast ${type}`; t.textContent=message; c.appendChild(t); setTimeout(()=>t.remove(),4000);
+        }
+      
+        async function updateVisitorCount() {
+          try {
+            // Increment once when the page first loads
+            await fetch("/api/visit", { method: "POST" });
+        
+            // Then fetch the updated count and display it
+            const res = await fetch("/api/visitors");
+            const data = await res.json();
+        
+            const el = document.getElementById("visitor-count");
+            if (el) el.textContent = data.visitors ?? "—";
+          } catch (err) {
+            console.error("Failed to fetch visitor count:", err);
+          }
+        }
+        
+        /* --------------------------------- init --------------------------------- */
+        document.addEventListener("DOMContentLoaded", async () => {
+          updateVisitorCount();
+          await maybeAddAzureDiscovery();
+          renderProviders();
+          if (window.lucide?.createIcons) lucide.createIcons();
+        
+          const input = document.getElementById("search");
+          input?.addEventListener("input", debounce(async (e) => {
+            const q = e.target.value.trim();
+            if (!q) {
+              if (mode === "provider") renderProviders();
+              else renderControlsNav();
+              showBanner("explorer", "Select a provider or control to get started.", "info");
+              return;
+            }
+        
+            if (mode === "provider") await searchProviders(q);
+            else if (mode === "control") await searchControls(q);
+          }, 300));
+        });
+    </script>
+  <div id="toast-container"></div>
+</body>
+</html>
